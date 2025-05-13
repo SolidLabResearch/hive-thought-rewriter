@@ -1,5 +1,10 @@
-# Name of the package
+# Hive Thought Rewriter
 
-# Usage
+The library rewrites different RSP-QL queries to either combine or decompose. 
 
-# License
+## Usage
+
+
+## License
+
+This code is copyrighted by [Ghent University - imec](https://www.ugent.be/ea/idlab/en) and released under the [MIT Licence](./LICENCE) 
