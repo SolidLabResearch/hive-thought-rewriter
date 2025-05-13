@@ -4,4 +4,7 @@ export class QueryDecomposer {
     constructor(query: string) {
         this.query = query
     }
+
+
+    
 }

@@ -1,13 +1,14 @@
 {
     "name": "hive-thought-rewriter",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Rewriting Queries by either combining or decomposing",
     "main": "dist/index.js",
     "scripts": {
         "build": "npx tsc",
         "start": "node dist/index.js",
         "test": "jest --coverage",
-        "test:watch": "jest --watch"
+        "test:watch": "jest --watch",
+        "release": "npm run build && npm publish --access public"
     },
     "keywords": [],
     "author": "Kushagra Singh Bisen",
