@@ -12,7 +12,7 @@ npm install hive-thought-rewriter
 
 ## Rewriting Queries by Combining
 
-Different queries in RSP-QL [[2](#footnotes-1)] query format can be specified and combined together to create a single RSP-QL query.
+Different queries in RSP-QL [[1](#footnotes-1)] query format can be specified and combined together to create a single RSP-QL query.
 
 
 ```ts
