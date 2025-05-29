@@ -120,22 +120,12 @@ export class QueryCombiner {
     const { operator, name } = parsedQuery.r2s;
     lines.push(`REGISTER ${operator} <${name}> AS`);
 
-    // 3. FROM NAMED WINDOW declarations
-    for (const window of parsedQuery.s2r) {
-        const { window_name, stream_name, width, slide } = window;
-        const w = this.shortenIri(window_name, parsedQuery.prefixes);
-        const s = this.shortenIri(stream_name, parsedQuery.prefixes);
-        lines.push(`FROM NAMED WINDOW ${w} ON STREAM ${s} [RANGE ${width} STEP ${slide}]`);
-    }
-
-    // 4. SELECT clause
+    // 3. SELECT clause
     let selectClause = "SELECT";
-
     const hasAgg =
         parsedQuery.aggregation_function &&
         parsedQuery.aggregation_function !== "" &&
         parsedQuery.aggregation_thing_in_context.length === parsedQuery.projection_variables.length;
-
     if (hasAgg) {
         const func = parsedQuery.aggregation_function.toUpperCase();
         for (let i = 0; i < parsedQuery.aggregation_thing_in_context.length; i++) {
@@ -146,10 +136,20 @@ export class QueryCombiner {
     } else {
         selectClause += " " + parsedQuery.projection_variables.map(v => `?${v}`).join(" ");
     }
+    lines.push(selectClause);
 
-    lines.push(`${selectClause} WHERE {`);
+    // 4. FROM NAMED WINDOW declarations
+    for (const window of parsedQuery.s2r) {
+        const { window_name, stream_name, width, slide } = window;
+        const w = this.shortenIri(window_name, parsedQuery.prefixes);
+        const s = this.shortenIri(stream_name, parsedQuery.prefixes);
+        lines.push(`FROM NAMED WINDOW ${w} ON STREAM ${s} [RANGE ${width} STEP ${slide}]`);
+    }
 
-    // 5. Extract and sanitize WHERE clause
+    // 5. WHERE clause
+    lines.push(`WHERE {`);
+
+    // 6. Extract and sanitize WHERE clause
     let whereClause = parsedQuery.sparql;
 
     // Replace GRAPH with WINDOW
@@ -163,7 +163,7 @@ export class QueryCombiner {
 
     let whereBody = match[1].trim();
 
-    // 6. Handle UNION blocks
+    // 7. Handle UNION blocks
     const unionBlocks = whereBody
         .split(/UNION/i)
         .map(block => {
@@ -174,7 +174,7 @@ export class QueryCombiner {
 
     lines.push(unionBlocks.join(" UNION "));
 
-    // 7. Close WHERE clause
+    // 8. Close WHERE clause
     lines.push("}");
 
     return lines.join("\n");

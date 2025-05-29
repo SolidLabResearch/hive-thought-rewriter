@@ -9,8 +9,6 @@ export class QueryDecomposer {
 
     decompose(query: string) {
         const originalQuery = this.parser.parse(query);
-
-
     }
 
 }
