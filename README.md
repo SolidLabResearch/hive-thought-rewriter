@@ -38,6 +38,34 @@ const combined_query_string = combiner.ParsedToString(combined);
 ## Rewriting Queries by Decomposing
 
 This is currently not possible and is a work in progress. 
+
+## Rewriting the Queries by changing the Window Parameters
+
+```ts
+
+import {RewriteChunkQuery} from "hive-thought-rewriter";
+
+// Define the new window parameters for the query i.e slide is 10 and width is 20
+
+const chunkRewriter = new RewriteChunkQuery(10, 20);
+
+const originalQuery = `PREFIX ex: <http://example.org/>
+            REGISTER RStream <output> AS
+            SELECT (AVG(?age) AS ?averageAge)
+            FROM NAMED WINDOW ex:w ON STREAM ex:stream [RANGE 10 STEP 5]
+            WHERE {
+                WINDOW ex:w {
+                    ?person a ex:Employee.
+                    ?person ex:hasAge ?age.
+                }
+            }`;
+
+const rewrittenQuery = chunkRewriter.rewrite(originalQuery);
+/**
+ * This will return the RSPQL query with the new window parameters as a string
+ */
+```
+
 ## License
 
 This code is copyrighted by [Ghent University - imec](https://www.ugent.be/ea/idlab/en) and released under the [MIT Licence](./LICENCE) 
