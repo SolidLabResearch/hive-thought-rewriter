@@ -47,9 +47,8 @@ export class RSPQLParser {
                 originalSparqlLines.push(trimmed_line);
             } else {
                 let sparqlLine = trimmed_line;
-                if (sparqlLine.startsWith("WINDOW")) {
-                    sparqlLine = sparqlLine.replace("WINDOW", "GRAPH");
-                }
+                // Replace all occurrences of WINDOW with GRAPH, not just at the start
+                sparqlLine = sparqlLine.replace(/WINDOW/g, "GRAPH");
                 if (sparqlLine.startsWith("PREFIX")) {
                     const regexp = /PREFIX +([^:]*): +<([^>]+)>/g;
                     const matches = trimmed_line.matchAll(regexp);
@@ -76,7 +75,29 @@ export class RSPQLParser {
         });
 
         // Ensure parsed.sparql is pure SPARQL
-        parsed.sparql = sparqlLines.join("\n");
+        let sparqlString = sparqlLines.join("\n");
+
+        // --- Fix for UNION blocks with extra curly braces ---
+        // If the query contains UNION, clean up braces in WHERE clause
+        if (/UNION/i.test(sparqlString)) {
+            // Extract WHERE body
+            const match = sparqlString.match(/WHERE\s*{([\s\S]*)}$/i);
+            if (match) {
+                let whereBody = match[1].trim();
+                const unionBlocks = whereBody
+                    .split(/UNION/i)
+                    .map(block => {
+                        let trimmed = block.trim();
+                        // Remove ALL leading and trailing curly braces and whitespace
+                        trimmed = trimmed.replace(/^(\s*\{)+/, '').replace(/(\}\s*)+$/, '').trim();
+                        return `{ ${trimmed} }}`; // double closing braces for valid SPARQL
+                    });
+                const newWhereBody = unionBlocks.join('\nUNION\n');
+                // Replace the old WHERE body with the cleaned one, and ensure the WHERE clause is closed
+                sparqlString = sparqlString.replace(/WHERE\s*{([\s\S]*)}$/i, `WHERE {\n${newWhereBody}\n}`);
+            }
+        }
+        parsed.sparql = sparqlString;
 
         // Parse the original SPARQL portion with aggregations for metadata
         const sparqlOnlyLines = originalSparqlLines.filter(

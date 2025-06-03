@@ -167,9 +167,9 @@ export class QueryCombiner {
     const unionBlocks = whereBody
         .split(/UNION/i)
         .map(block => {
-            const trimmed = block.trim();
-            const unwrapped = trimmed.replace(/^\{+\s*/, "").replace(/\s*\}+$/, "");
-            return `{ ${unwrapped} }`;
+            // Remove all leading/trailing curly braces and whitespace
+            const trimmed = block.trim().replace(/^\{+/, '').replace(/\}+$/, '').trim();
+            return `{ ${trimmed} }`;
         });
 
     lines.push(unionBlocks.join(" UNION "));
