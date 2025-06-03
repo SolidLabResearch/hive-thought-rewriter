@@ -1,6 +1,6 @@
 {
     "name": "hive-thought-rewriter",
-    "version": "1.1.1",
+    "version": "1.2.1",
     "description": "Rewriting Queries by either combining or decomposing",
     "main": "dist/index.js",
     "scripts": {
