@@ -1,6 +1,6 @@
 {
     "name": "hive-thought-rewriter",
-    "version": "1.2.1",
+    "version": "1.3.1",
     "description": "Rewriting Queries by either combining or decomposing",
     "main": "dist/index.js",
     "scripts": {
@@ -21,6 +21,7 @@
         "typescript": "^4.9.4"
     },
     "dependencies": {
+        "rspql-containment-checker": "^2.3.0",
         "sparqljs": "^3.7.3"
     }
 }
