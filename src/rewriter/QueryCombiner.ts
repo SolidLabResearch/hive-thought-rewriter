@@ -13,7 +13,7 @@ export class QueryCombiner {
         this.queries.push(query);
     }
 
-    combine(): ParsedQuery {
+    combine(strictSubjectMatch: boolean = true): ParsedQuery {
         const parsedQueries: ParsedQuery[] = this.queries.map(query => this.parser.parse(query));
         const combinedQuery = new ParsedQuery();
 
@@ -23,9 +23,15 @@ export class QueryCombiner {
             query.prefixes.forEach((iri, prefix) => combinedQuery.prefixes.set(prefix, iri));
         });
 
+        // Deduplicate window definitions before adding to combinedQuery
+        const windowSet = new Set<string>();
         parsedQueries.forEach(query => {
             query.s2r.forEach(window => {
-                combinedQuery.add_s2r(window);
+                const key = `${window.window_name}|${window.stream_name}|${window.width}|${window.slide}`;
+                if (!windowSet.has(key)) {
+                    windowSet.add(key);
+                    combinedQuery.add_s2r(window);
+                }
             });
         });
 
@@ -61,37 +67,88 @@ export class QueryCombiner {
             q => q.s2r.length === 1 && sameWindowDef(q.s2r[0], parsedQueries[0].s2r[0])
         );
 
-        const extractSubject = (sparql: string): string | null => {
-            const match = sparql.match(/\{\s*GRAPH\s+[^}]*\{\s*(\?[a-zA-Z0-9_]+)/);
-            return match ? match[1] : null;
+        // Improved subject extraction: collect all subjects in each query
+        const extractSubjects = (sparql: string): Set<string> => {
+            const matches = [...sparql.matchAll(/\{\s*GRAPH\s+[^}]*\{\s*(\?[a-zA-Z0-9_]+)/g)];
+            return new Set(matches.map(m => m[1]));
         };
-
-        const baseSubject = extractSubject(parsedQueries[0].sparql);
-        const allSameSubject = parsedQueries.every(q => extractSubject(q.sparql) === baseSubject);
+        const baseSubjects = extractSubjects(parsedQueries[0].sparql);
+        let allSameSubjects: boolean;
+        if (strictSubjectMatch) {
+            // Strict: all subject sets must be exactly equal
+            const setsEqual = (a: Set<string>, b: Set<string>) =>
+                a.size === b.size && [...a].every(x => b.has(x));
+            allSameSubjects = parsedQueries.every(q => {
+                const subjects = extractSubjects(q.sparql);
+                return setsEqual(subjects, baseSubjects);
+            });
+        } else {
+            // Partial: at least one subject overlaps
+            const hasOverlap = (a: Set<string>, b: Set<string>) =>
+                [...a].some(x => b.has(x));
+            allSameSubjects = parsedQueries.every(q => {
+                const subjects = extractSubjects(q.sparql);
+                return hasOverlap(subjects, baseSubjects);
+            });
+        }
 
         let combinedWhere = "";
 
-        if (allSameWindow && allSameSubject) {
+        if (allSameWindow && allSameSubjects) {
             // JOIN logic
             const windowName = parsedQueries[0].s2r[0].window_name;
             const shortenedWindow = this.shortenIri(windowName, combinedQuery.prefixes);
-
             const patterns = parsedQueries.map(q => {
                 const match = q.sparql.match(/GRAPH\s+[^}]+\{\s*((.|\s)*?)\}/m);
                 return match ? match[1].trim() : "";
             });
-
-            combinedWhere = `{ WINDOW ${shortenedWindow} {\n${patterns.join("\n")}\n} }`;
-        } else {
-            // UNION logic
+            combinedWhere = `WINDOW ${shortenedWindow} {\n${patterns.join("\n")}\n}`;
+        } else if (allSameWindow) {
+            // UNION inside a single WINDOW block, no extra curly braces
+            const windowName = parsedQueries[0].s2r[0].window_name;
+            const shortenedWindow = this.shortenIri(windowName, combinedQuery.prefixes);
             const blocks = parsedQueries.map(q => {
                 let body = q.sparql;
                 body = body.replace(/GRAPH\s+/gi, "WINDOW ");
-                const inner = body.split("WHERE")[1].trim();
-                return `{ ${inner} }`;
+                const match = body.match(/WHERE\s*{([\s\S]*)}$/i);
+                if (!match) {
+                    throw new Error("Invalid SPARQL content: missing WHERE clause");
+                }
+                let inner = match[1].trim();
+                // Extract just the window block contents
+                const windowMatch = inner.match(/WINDOW\s+[^{]+\{([^}]+)\}/);
+                if (!windowMatch) {
+                    throw new Error("Invalid SPARQL content: missing WINDOW block");
+                }
+                const windowContent = windowMatch[1].trim();
+                return `{ ${windowContent} }`;
             });
-
-            combinedWhere = blocks.join("\nUNION\n");
+            combinedWhere = `WINDOW ${shortenedWindow} {\n${blocks.join("\nUNION\n")}\n}`;
+        } else {
+            // UNION logic (different windows)
+            const blocks = parsedQueries.map(q => {
+                let body = q.sparql;
+                body = body.replace(/GRAPH\s+/gi, "WINDOW ");
+                const match = body.match(/WHERE\s*{([\s\S]*)}$/i);
+                if (!match) {
+                    throw new Error("Invalid SPARQL content: missing WHERE clause");
+                }
+                let inner = match[1].trim();
+                // Extract just the window block contents
+                const windowMatch = inner.match(/WINDOW\s+[^{]+\{([^}]+)\}/);
+                if (!windowMatch) {
+                    throw new Error("Invalid SPARQL content: missing WINDOW block");
+                }
+                const windowContent = windowMatch[1].trim();
+                // Format with proper nesting
+                const windowNameMatch = windowMatch[0].match(/WINDOW\s+([^{\s]+)/);
+                if (!windowNameMatch) {
+                    throw new Error("Invalid SPARQL content: missing WINDOW name");
+                }
+                const windowName = windowNameMatch[1];
+                return `{ WINDOW ${windowName} { ${windowContent} } }`;
+            });
+            combinedWhere = `{ ${blocks.join("\nUNION\n")} }`;
         }
 
         const projectionString = combinedQuery.aggregation_function && combinedQuery.aggregation_thing_in_context.length
@@ -101,7 +158,8 @@ export class QueryCombiner {
             }).join(" ")
             : combinedQuery.projection_variables.map(v => `?${v}`).join(" ");
 
-        combinedQuery.set_sparql(`SELECT ${projectionString} WHERE ${combinedWhere}`);
+        // Always wrap the combinedWhere in a WHERE clause
+        combinedQuery.set_sparql(`SELECT ${projectionString} WHERE {\n${combinedWhere}\n}`);
 
         return combinedQuery;
     }
@@ -109,76 +167,81 @@ export class QueryCombiner {
 
 
     ParsedToString(parsedQuery: ParsedQuery): string {
-    const lines: string[] = [];
+        const lines: string[] = [];
 
-    // 1. PREFIX declarations
-    for (const [prefix, iri] of parsedQuery.prefixes.entries()) {
-        lines.push(`PREFIX ${prefix}: <${iri}>`);
-    }
-
-    // 2. REGISTER clause
-    const { operator, name } = parsedQuery.r2s;
-    lines.push(`REGISTER ${operator} <${name}> AS`);
-
-    // 3. SELECT clause
-    let selectClause = "SELECT";
-    const hasAgg =
-        parsedQuery.aggregation_function &&
-        parsedQuery.aggregation_function !== "" &&
-        parsedQuery.aggregation_thing_in_context.length === parsedQuery.projection_variables.length;
-    if (hasAgg) {
-        const func = parsedQuery.aggregation_function.toUpperCase();
-        for (let i = 0; i < parsedQuery.aggregation_thing_in_context.length; i++) {
-            const varName = parsedQuery.aggregation_thing_in_context[i];
-            const alias = parsedQuery.projection_variables[i] || `agg_${i}`;
-            selectClause += ` (${func}(?${varName}) AS ?${alias})`;
+        // 1. PREFIX declarations
+        for (const [prefix, iri] of parsedQuery.prefixes.entries()) {
+            lines.push(`PREFIX ${prefix}: <${iri}>`);
         }
-    } else {
-        selectClause += " " + parsedQuery.projection_variables.map(v => `?${v}`).join(" ");
+
+        // 2. REGISTER clause
+        const { operator, name } = parsedQuery.r2s;
+        lines.push(`REGISTER ${operator} <${name}> AS`);
+
+        // 3. SELECT clause
+        let selectClause = "SELECT";
+        const hasAgg =
+            parsedQuery.aggregation_function &&
+            parsedQuery.aggregation_function !== "" &&
+            parsedQuery.aggregation_thing_in_context.length === parsedQuery.projection_variables.length;
+        if (hasAgg) {
+            const func = parsedQuery.aggregation_function.toUpperCase();
+            for (let i = 0; i < parsedQuery.aggregation_thing_in_context.length; i++) {
+                const varName = parsedQuery.aggregation_thing_in_context[i];
+                const alias = parsedQuery.projection_variables[i] || `agg_${i}`;
+                selectClause += ` (${func}(?${varName}) AS ?${alias})`;
+            }
+        } else {
+            selectClause += " " + parsedQuery.projection_variables.map(v => `?${v}`).join(" ");
+        }
+        lines.push(selectClause);
+
+        // 4. FROM NAMED WINDOW declarations
+        for (const window of parsedQuery.s2r) {
+            const { window_name, stream_name, width, slide } = window;
+            const w = this.shortenIri(window_name, parsedQuery.prefixes);
+            const s = this.shortenIri(stream_name, parsedQuery.prefixes);
+            lines.push(`FROM NAMED WINDOW ${w} ON STREAM ${s} [RANGE ${width} STEP ${slide}]`);
+        }
+
+        // 5. WHERE clause
+        lines.push(`WHERE {`);
+
+        // 6. Extract and sanitize WHERE clause
+        let whereClause = parsedQuery.sparql;
+
+        // Replace GRAPH with WINDOW
+        whereClause = whereClause.replace(/GRAPH\s+/gi, "WINDOW ");
+
+        // Extract WHERE body content
+        const match = whereClause.match(/WHERE\s*{([\s\S]*)}$/i);
+        if (!match) {
+            throw new Error("Invalid SPARQL content: missing WHERE clause");
+        }
+
+        let whereBody = match[1].trim();
+
+        // If the WHERE body starts with a single WINDOW block, print it directly (no extra curly braces)
+        const windowBlockMatch = whereBody.match(/^WINDOW\s+[^\{]+\{[\s\S]*\}$/);
+        if (windowBlockMatch) {
+            lines.push(whereBody);
+        } else {
+            // Otherwise, preserve the old logic (for legacy/multi-window cases)
+            const unionBlocks = whereBody
+                .split(/UNION/i)
+                .map(block => {
+                    // Remove all leading/trailing curly braces and whitespace
+                    const trimmed = block.trim().replace(/^{+/, '').replace(/}+$/, '').trim();
+                    return `{ ${trimmed} }`;
+                });
+            lines.push(unionBlocks.join(" UNION "));
+        }
+
+        // 8. Close WHERE clause
+        lines.push("}");
+
+        return lines.join("\n");
     }
-    lines.push(selectClause);
-
-    // 4. FROM NAMED WINDOW declarations
-    for (const window of parsedQuery.s2r) {
-        const { window_name, stream_name, width, slide } = window;
-        const w = this.shortenIri(window_name, parsedQuery.prefixes);
-        const s = this.shortenIri(stream_name, parsedQuery.prefixes);
-        lines.push(`FROM NAMED WINDOW ${w} ON STREAM ${s} [RANGE ${width} STEP ${slide}]`);
-    }
-
-    // 5. WHERE clause
-    lines.push(`WHERE {`);
-
-    // 6. Extract and sanitize WHERE clause
-    let whereClause = parsedQuery.sparql;
-
-    // Replace GRAPH with WINDOW
-    whereClause = whereClause.replace(/GRAPH\s+/gi, "WINDOW ");
-
-    // Extract WHERE body content
-    const match = whereClause.match(/WHERE\s*{([\s\S]*)}$/i);
-    if (!match) {
-        throw new Error("Invalid SPARQL content: missing WHERE clause");
-    }
-
-    let whereBody = match[1].trim();
-
-    // 7. Handle UNION blocks
-    const unionBlocks = whereBody
-        .split(/UNION/i)
-        .map(block => {
-            // Remove all leading/trailing curly braces and whitespace
-            const trimmed = block.trim().replace(/^\{+/, '').replace(/\}+$/, '').trim();
-            return `{ ${trimmed} }`;
-        });
-
-    lines.push(unionBlocks.join(" UNION "));
-
-    // 8. Close WHERE clause
-    lines.push("}");
-
-    return lines.join("\n");
-}
 
 
 

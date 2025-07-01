@@ -77,6 +77,8 @@ GRAPH :w1 { ?sensor :value ?v ; :measurement: ?m }
 test('test_sparql_extract_multiple_windows', async () => {
     const parser = new RSPQLParser();
     const parsed_query = parser.parse(advanced_query);
+    console.log(parsed_query);
+    
 
     const expected_sparql =
         `PREFIX : <https://rsp.js/>
