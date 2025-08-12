@@ -21,6 +21,8 @@
         "typescript": "^4.9.4"
     },
     "dependencies": {
+        "eyereasoner": "^18.19.7",
+        "rdf-data-factory": "^2.0.2",
         "rspql-containment-checker": "^2.3.0",
         "sparqljs": "^3.7.3"
     }
