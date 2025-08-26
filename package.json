@@ -1,6 +1,6 @@
 {
     "name": "hive-thought-rewriter",
-    "version": "1.5.2",
+    "version": "1.6.2",
     "description": "Rewriting Queries by either combining or decomposing",
     "main": "dist/index.js",
     "scripts": {
@@ -8,7 +8,9 @@
         "start": "node dist/index.js",
         "test": "jest --coverage",
         "test:watch": "jest --watch",
-        "release": "npm run build && npm publish --access public"
+        "release": "npm run build && npm publish --access public",
+        "lint:ts": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0",
+        "lint:ts:fix": "eslint . --ext ts --report-unused-disable-directives --max-warnings 0 --fix"
     },
     "keywords": [],
     "author": "Kushagra Singh Bisen",
@@ -21,6 +23,9 @@
         "typescript": "^4.9.4"
     },
     "dependencies": {
+        "eslint": "^8.57.1",
+        "eslint-plugin-jest": "^29.0.1",
+        "eslint-plugin-jsdoc": "^54.0.0",
         "eyereasoner": "^18.19.7",
         "rdf-data-factory": "^2.0.2",
         "rspql-containment-checker": "^2.3.0",

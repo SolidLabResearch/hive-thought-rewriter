@@ -49,7 +49,7 @@ WHERE {
     combiner.addQuery(queryOne);
     combiner.addQuery(queryTwo);
     combiner.addQuery(queryThree);
-    let combined_parsedQuery = combiner.combine();
+    const combined_parsedQuery = combiner.combine();
     console.log(combiner.ParsedToString(combined_parsedQuery));
     console.log(new RSPQLParser().parse(combiner.ParsedToString(combined_parsedQuery)).sparql);
 });
@@ -85,7 +85,7 @@ WHERE {
     const combiner = new QueryCombiner();
     combiner.addQuery(queryOne);
     combiner.addQuery(queryTwo);
-    let combined_parsedQuery = combiner.combine();
+    const combined_parsedQuery = combiner.combine();
     console.log(combined_parsedQuery);
     
     // console.log(combiner.ParsedToString(combined_parsedQuery));
@@ -117,7 +117,7 @@ WHERE {
     const combiner = new QueryCombiner();
     combiner.addQuery(queryOne);
     combiner.addQuery(queryTwo);
-    let combined_parsedQuery = combiner.combine(true); 
+    const combined_parsedQuery = combiner.combine(true); 
     console.log("Strict match (sets equal):");
     console.log(combiner.ParsedToString(combined_parsedQuery));
 });
@@ -148,7 +148,7 @@ WHERE {
     const combiner = new QueryCombiner();
     combiner.addQuery(queryOne);
     combiner.addQuery(queryTwo);
-    let combined_parsedQuery = combiner.combine(false);
+    const combined_parsedQuery = combiner.combine(false);
     console.log(combiner.ParsedToString(combined_parsedQuery));
 });
 

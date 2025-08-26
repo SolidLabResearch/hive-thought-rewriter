@@ -83,7 +83,7 @@ export class RSPQLParser {
             // Extract WHERE body
             const match = sparqlString.match(/WHERE\s*{([\s\S]*)}$/i);
             if (match) {
-                let whereBody = match[1].trim();
+                const whereBody = match[1].trim();
                 const unionBlocks = whereBody
                     .split(/UNION/i)
                     .map(block => {

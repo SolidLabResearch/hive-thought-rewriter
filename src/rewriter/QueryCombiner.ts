@@ -1,18 +1,57 @@
 import { ParsedQuery, RSPQLParser, WindowDefinition } from "../parser/RSPQLParser";
 
+/**
+ * The class is responsible for combining RSP-QL queries into a single query.
+ */
 export class QueryCombiner {
     private queries: string[];
     private parser: RSPQLParser;
 
+    /**
+     * The constructor for the QueryCombiner class which initializes the RSPQL parser and the query list.
+     */
     constructor() {
         this.queries = [];
         this.parser = new RSPQLParser();
     }
 
+    /**
+     * Adds a new query to the combiner.
+     * @param {string} query - The query to add.
+     */
     addQuery(query: string) {
         this.queries.push(query);
     }
 
+    /**
+     * Clears all queries from the combiner.
+     */
+    clearQueries() {
+        this.queries = [];
+    }
+
+    /**
+     * Combines the queries into a single query.
+     */
+    combineQueries(){
+        if (this.queries.length === 0){
+            throw new Error("No queries to combine");
+        } else {
+            const parsedQueries: ParsedQuery[] = this.queries.map(queryn => this.parser.parse(queryn));
+            const combinedQuery = new ParsedQuery();
+
+            combinedQuery.set_r2s(parsedQueries[0].r2s);
+            
+
+        }
+    }
+
+    /**
+     * Combines the parsed queries into a single query with either a strict subject match or a loose subject match.
+     * With a strict subject match, it would only combine with a JOIN if all of the subjects are the same.
+     * With a loose subject match, it would combine with a JOIN if any of the subjects are the same.
+     * @param {boolean} strictSubjectMatch - Boolean indicating if strict subject matching should be used or not. True for strict, false for loose.
+     */
     combine(strictSubjectMatch: boolean = true): ParsedQuery {
         const parsedQueries: ParsedQuery[] = this.queries.map(query => this.parser.parse(query));
         const combinedQuery = new ParsedQuery();
@@ -114,7 +153,7 @@ export class QueryCombiner {
                 if (!match) {
                     throw new Error("Invalid SPARQL content: missing WHERE clause");
                 }
-                let inner = match[1].trim();
+                const inner = match[1].trim();
                 // Extract just the window block contents
                 const windowMatch = inner.match(/WINDOW\s+[^{]+\{([^}]+)\}/);
                 if (!windowMatch) {
@@ -133,7 +172,7 @@ export class QueryCombiner {
                 if (!match) {
                     throw new Error("Invalid SPARQL content: missing WHERE clause");
                 }
-                let inner = match[1].trim();
+                const inner = match[1].trim();
                 // Extract just the window block contents
                 const windowMatch = inner.match(/WINDOW\s+[^{]+\{([^}]+)\}/);
                 if (!windowMatch) {
@@ -166,6 +205,11 @@ export class QueryCombiner {
 
 
 
+    /**
+     * The function converts a parsed representation of a SPARQL query into a string.
+     * @param {ParsedQuery} parsedQuery - The parsed representation of the SPARQL query.
+     * @returns {string} - The string representation of the SPARQL query.
+     */
     ParsedToString(parsedQuery: ParsedQuery): string {
         const lines: string[] = [];
 
@@ -219,7 +263,7 @@ export class QueryCombiner {
             throw new Error("Invalid SPARQL content: missing WHERE clause");
         }
 
-        let whereBody = match[1].trim();
+        const whereBody = match[1].trim();
 
         // If the WHERE body starts with a single WINDOW block, print it directly (no extra curly braces)
         const windowBlockMatch = whereBody.match(/^WINDOW\s+[^\{]+\{[\s\S]*\}$/);
@@ -245,6 +289,12 @@ export class QueryCombiner {
 
 
 
+    /**
+     * Shortens an IRI using the provided prefixes.
+     * @param {string} iri - The IRI to shorten.
+     * @param {Map<string, string>} prefixes - A map of prefix strings to namespace IRIs.
+     * @return {string} - The shortened IRI, or the full IRI if no prefix matches.
+     */
     shortenIri(iri: string, prefixes: Map<string, string>): string {
         for (const [prefix, ns] of prefixes.entries()) {
             if (iri.startsWith(ns)) {
