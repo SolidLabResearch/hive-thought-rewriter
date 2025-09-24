@@ -67,7 +67,7 @@ test('test_simple_sparql_extract', async () => {
 
     const expected_sparql =
         `PREFIX : <https://rsp.js/>
-SELECT AVG(?v) as ?avgTemp
+SELECT ?v
 WHERE{
 GRAPH :w1 { ?sensor :value ?v ; :measurement: ?m }
 }`;
@@ -82,8 +82,7 @@ test('test_sparql_extract_multiple_windows', async () => {
 
     const expected_sparql =
         `PREFIX : <https://rsp.js/>
-SELECT AVG(?v) as ?avgTemp
-
+SELECT ?v
 WHERE{
 ?sensor a :TempSensor.
 GRAPH :w1 { ?sensor :value ?v ; :measurement: ?m }

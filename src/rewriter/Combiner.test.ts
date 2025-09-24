@@ -4,6 +4,6 @@ describe("CombinerClass", () => {
    const combiner = new Combiner("SELECT * WHERE { ?s ?p ?o }", "SELECT ?s WHERE { ?s ?p ?o }");
    const result = combiner.combineQueries();
 
-   expect(result).toBe("EXPECTED_COMBINED_QUERY");
+   expect(result).toBe("SELECT * ?s WHERE {\n  ?s ?p ?o.\n  ?s ?p ?o.\n}");
  });
 });

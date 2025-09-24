@@ -1,7 +1,7 @@
 import { ParsedQuery, RSPQLParser } from "../parser/RSPQLParser"
 
 /**
- * 
+ *
  */
 export class QueryDecomposer {
 
@@ -17,8 +17,9 @@ export class QueryDecomposer {
      *
      * @param query
      */
-    decompose(query: string) {
+    decompose(query: string): ParsedQuery {
         const originalQuery = this.parser.parse(query);
+        return originalQuery;
     }
 
 }
