@@ -765,3 +765,62 @@ it("should test clearQueries functionality", () => {
     // Should throw error when trying to combine with no queries
     expect(() => combiner.combine()).toThrow("No queries to combine");
 });
+
+it("should combine queries with same MAX aggregation and different windows", () => {
+    const query1 = `
+PREFIX mqtt_broker: <mqtt://localhost:1883/>
+PREFIX saref: <https://saref.etsi.org/core/>
+PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
+PREFIX : <https://rsp.js> 
+REGISTER RStream <output> AS
+SELECT (MAX(?value) AS ?avgWearableX)
+FROM NAMED WINDOW <mqtt://localhost:1883/wearableX> ON STREAM mqtt_broker:wearableX [RANGE 60000 STEP 30000]
+WHERE {
+    WINDOW <mqtt://localhost:1883/wearableX> {
+        ?s1 saref:hasValue ?value .
+        ?s1 saref:relatesToProperty dahccsensors:wearableX .
+    }
+}
+    `;
+    const query2 = `
+PREFIX mqtt_broker: <mqtt://localhost:1883/>
+PREFIX saref: <https://saref.etsi.org/core/>
+PREFIX dahccsensors: <https://dahcc.idlab.ugent.be/Homelab/SensorsAndActuators/>
+PREFIX : <https://rsp.js> 
+REGISTER RStream <output> AS
+SELECT (MAX(?value) AS ?avgSmartphoneX)
+FROM NAMED WINDOW <mqtt://localhost:1883/smartphoneX> ON STREAM mqtt_broker:smartphoneX [RANGE 60000 STEP 30000]
+WHERE {
+    WINDOW <mqtt://localhost:1883/smartphoneX> {
+        ?s2 saref:hasValue ?value .
+        ?s2 saref:relatesToProperty dahccsensors:smartphoneX .
+    }
+} 
+    `;
+
+    const combiner = new QueryCombiner();
+    combiner.addQuery(query1);
+    combiner.addQuery(query2);
+    const result = combiner.combine();    
+
+    // Should have MAX aggregation function since both queries use MAX
+    expect(result.aggregation_function).toBe('MAX');
+    
+    // Should unify the semantically equivalent variables (?value in both queries)
+    expect(result.aggregation_thing_in_context).toHaveLength(1);
+    expect(result.aggregation_thing_in_context).toContain('value');
+    
+    // Should have unified projection variable name
+    expect(result.projection_variables).toContain('avgValue');
+    
+    // Should have both window definitions
+    expect(result.s2r).toHaveLength(2);
+    expect(result.s2r.some(w => w.window_name === 'mqtt://localhost:1883/wearableX')).toBe(true);
+    expect(result.s2r.some(w => w.window_name === 'mqtt://localhost:1883/smartphoneX')).toBe(true);
+    
+    // Should use UNION since windows are different
+    const combinedString = combiner.ParsedToString(result);
+    expect(combinedString).toContain('UNION');
+    expect(combinedString).toContain('FROM NAMED WINDOW mqtt_broker:wearableX');
+    expect(combinedString).toContain('FROM NAMED WINDOW mqtt_broker:smartphoneX');
+});
